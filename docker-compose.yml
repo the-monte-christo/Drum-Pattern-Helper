@@ -1,0 +1,14 @@
+services:
+  app:
+    build: .
+    image: drum-pattern-helper:latest
+    container_name: drum-pattern-helper
+    restart: unless-stopped
+    # Nur lokal erreichbar – nginx auf dem Host übernimmt TLS und die Domain.
+    ports:
+      - "127.0.0.1:3000:3000"
+    volumes:
+      - drums-data:/data
+
+volumes:
+  drums-data:

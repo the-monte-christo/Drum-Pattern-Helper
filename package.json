@@ -1,0 +1,36 @@
+{
+  "name": "drum-pattern-helper",
+  "version": "1.0.0",
+  "description": "Drum Pattern Helper – Pattern-Baukasten und Übungstool für Schlagzeuger (PWA)",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=22.13"
+  },
+  "scripts": {
+    "dev": "concurrently -k -n api,web -c blue,green \"npm:dev:server\" \"npm:dev:client\"",
+    "dev:server": "node --watch --disable-warning=ExperimentalWarning server/index.js",
+    "dev:client": "vite",
+    "build": "vite build",
+    "start": "node --disable-warning=ExperimentalWarning server/index.js",
+    "test": "node --disable-warning=ExperimentalWarning --test \"tests/**/*.test.js\"",
+    "test:e2e": "node --disable-warning=ExperimentalWarning scripts/e2e.mjs",
+    "icons": "node scripts/make-icons.mjs"
+  },
+  "dependencies": {
+    "@fastify/static": "^10.1.5",
+    "fastify": "^5.12.5",
+    "preact": "^11.0.0"
+  },
+  "devDependencies": {
+    "@preact/preset-vite": "^2.10.6",
+    "concurrently": "^10.0.5",
+    "puppeteer-core": "^25.12.0",
+    "vite": "^8.3.2"
+  },
+  "license": "Unlicense",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/the-monte-christo/Drum-Pattern-Helper.git"
+  }
+}
