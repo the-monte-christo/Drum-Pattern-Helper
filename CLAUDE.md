@@ -37,7 +37,24 @@ src/audio/ticker.worker.js  25-ms-Takt im Worker (nicht gedrosselt im Hintergrun
 src/components/     Sidebar, PatternHeader, LayerGrid, Editor, Transport, ui (Icon, Stepper, useAnimationFrame)
 public/sw.js        Service Worker (handgeschrieben, kein Workbox)
 scripts/            make-icons.mjs, e2e.mjs
+deploy/server/      Produktion: docker-compose.prod.yml, deploy.sh, nginx-Vhost + Header-Snippet, einrichten-root.sh
+.github/workflows/  ci.yml (Tests, Build, E2E bei Push/PR), release.yml (Tag v* → Docker-Bild nach ghcr.io)
 ```
+
+## Deployment (Details in README.md)
+
+- Release = Git-Tag `v*` → Action baut `ghcr.io/the-monte-christo/drum-pattern-helper:<tag>` + `:latest`.
+- Server: `ssh admin@pvtsrv.blanke.nrw` (Windows: `C:/Windows/System32/OpenSSH/ssh.exe`, siehe unten).
+  admin hat **kein sudo für Agenten** – root-Schritte (nginx, certbot) nur als Skript für den Inhaber vorbereiten.
+  admin ist in der docker-Gruppe und an ghcr.io angemeldet.
+- Live: `/opt/drum-pattern-helper` (Port 127.0.0.1:3030), Domain `drumpatternhelper.blanke.nrw`.
+  Einspielen: `/opt/drum-pattern-helper/deploy.sh [vX.Y.Z]` (als admin).
+- Auf dem Server laufen weitere Projekte (republic-of-rome :3010, schwindelex :3020, n8n :5001 u. a.) –
+  deren Dateien, Container und nginx-Configs nicht anfassen. Neuer Dienst = neuer freier Port.
+- CSP in `deploy/server/nginx-headers.conf` ist streng (kein Inline-Skript/-Style). Styles nur per CSSOM
+  (`el.style`, Preact-`style`-Objekte) setzen, keine `style="..."`-Strings im HTML, keine externen Ressourcen.
+- Änderungen an deploy/server/* müssen auf dem Server nachgezogen werden (deploy.sh/Compose nach
+  /opt/drum-pattern-helper kopieren; nginx-Dateien braucht root → einrichten-root.sh erneut ausführen lassen).
 
 ### Datenmodell (`shared/pattern.js`)
 
@@ -101,8 +118,8 @@ scripts/            make-icons.mjs, e2e.mjs
 Fertig: alle Punkte aus der Projektübersicht (Liste, Taktart, Tempo mit Sofort-Speichern, 5 Layer,
 Platzhalter-Editor, Metronom, Wiedergabe, Lautstärke je Layer, Hell/Dunkel, PWA, Docker).
 
-Nicht verifiziert: Docker-Build (auf dem Entwicklungsrechner war kein Docker installiert),
-Klang auf echten Geräten (Timing ist per E2E geprüft, gehört wurde nichts).
+Nicht verifiziert: Klang auf echten Geräten (Timing ist per E2E geprüft, gehört wurde nichts).
+Der Docker-Build läuft in der Release-Action (lokal ist kein Docker installiert).
 
 Ideen / mögliche nächste Schritte (nicht beauftragt):
 - Authentifizierung – die API ist offen; bei öffentlicher Domain mindestens Basic Auth in nginx

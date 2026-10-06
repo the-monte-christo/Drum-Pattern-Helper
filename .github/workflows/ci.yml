@@ -1,0 +1,31 @@
+# Prüft jeden Push auf main und jeden Pull Request: Unit-/API-Tests, Build, Browser-E2E.
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  pruefen:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+          cache: npm
+
+      - run: npm ci
+
+      - name: Tests
+        run: npm test
+
+      - name: Frontend bauen
+        run: npm run build
+
+      # Nutzt das auf dem Runner vorinstallierte Google Chrome.
+      - name: Browser-E2E
+        run: npm run test:e2e

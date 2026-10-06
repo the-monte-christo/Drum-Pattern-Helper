@@ -1,0 +1,21 @@
+# Produktionsstapel auf dem vServer (/opt/drum-pattern-helper).
+# Start über ./deploy.sh – die App hört nur auf 127.0.0.1, nach außen geht ausschließlich nginx.
+services:
+  app:
+    image: ${APP_IMAGE:-ghcr.io/the-monte-christo/drum-pattern-helper:latest}
+    restart: unless-stopped
+    environment:
+      LOG_LEVEL: warn
+    ports:
+      - '127.0.0.1:${APP_PORT:-3030}:3000'
+    # SQLite-Datei direkt auf dem Host, damit Sicherungen ohne Umweg möglich sind.
+    # Der Container läuft als „node“ (UID 1000) = admin auf dem Server.
+    volumes:
+      - ./daten:/data
+    # Sparsam bleiben: der Server hat 1,8 GB Arbeitsspeicher.
+    mem_limit: 256m
+    logging:
+      driver: json-file
+      options:
+        max-size: 10m
+        max-file: '3'

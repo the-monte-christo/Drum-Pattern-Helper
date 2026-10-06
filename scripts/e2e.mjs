@@ -62,7 +62,8 @@ const setRange = (page, selector, value) =>
 const browser = await puppeteer.launch({
   executablePath,
   headless: true,
-  args: ['--autoplay-policy=no-user-gesture-required'],
+  // Auf Linux-CI-Runnern steht die Chrome-Sandbox (User Namespaces) nicht immer zur Verfügung.
+  args: ['--autoplay-policy=no-user-gesture-required', ...(process.env.CI ? ['--no-sandbox'] : [])],
 });
 
 try {

@@ -36,7 +36,8 @@ shared/pattern.js     Pattern-Modell und -Logik (Client + Server)
 server/               Fastify-App, SQLite-Store
 src/                  Preact-UI, Audio-Engine (src/audio)
 public/               Manifest, Service Worker, Icons
-deploy/nginx.conf     Beispiel-Konfiguration Reverse Proxy
+deploy/server/        Produktion: Compose, deploy.sh, nginx-Vhost, Root-Einrichtung
+.github/workflows/    CI (Tests, Build, E2E) und Release (Docker-Bild → ghcr.io)
 tests/                Unit- und API-Tests (node:test)
 scripts/              Icon-Generator, Browser-E2E-Test
 ```
@@ -67,23 +68,65 @@ Beim ersten Start mit leerer Datenbank werden drei Demo-Pattern angelegt
 | `DB_FILE`   | `./data/drums.db` | Pfad der SQLite-Datei (Docker: `/data/drums.db`) |
 | `LOG_LEVEL` | `info`            | Fastify-/Pino-Loglevel |
 
-## Deployment (Docker + nginx)
+## Deployment
 
-```bash
-git clone https://github.com/the-monte-christo/Drum-Pattern-Helper.git drum-pattern-helper
-cd drum-pattern-helper
-docker compose up -d --build
+Live: <https://drumpatternhelper.blanke.nrw>, auf demselben vServer und nach demselben Muster wie
+republic-of-rome.blanke.nrw.
+
+```
+git tag vX.Y.Z → GitHub Action „Release“ → ghcr.io/the-monte-christo/drum-pattern-helper:vX.Y.Z + :latest
+                                              ↓ docker compose pull
+vServer: /opt/drum-pattern-helper/deploy.sh → Container auf 127.0.0.1:3030 ← nginx (TLS, Let's Encrypt)
 ```
 
-Der Container lauscht nur auf `127.0.0.1:3000`, die Daten liegen im Volume `drums-data`.
-`deploy/nginx.conf` ist eine Vorlage für den Reverse Proxy mit TLS: Domain eintragen,
-nach `/etc/nginx/sites-available/` kopieren, aktivieren und das Zertifikat z. B. mit certbot holen.
+### Neue Version veröffentlichen
 
-Update: `git pull && docker compose up -d --build`.
+```bash
+# lokal: Version in package.json anheben, committen, dann
+git tag v1.0.1 && git push origin main v1.0.1     # Action baut und veröffentlicht das Bild
 
-Ohne Docker: `npm ci && npm run build && npm start`, z. B. als systemd-Dienst.
+# auf dem Server (als admin, kein root nötig)
+/opt/drum-pattern-helper/deploy.sh            # latest
+/opt/drum-pattern-helper/deploy.sh v1.0.1     # bestimmte Version, auch zum Zurückrollen
+```
 
-> Hinweis: Für Service Worker und Installation als App ist HTTPS nötig (localhost ausgenommen).
+`deploy.sh` sichert vorher die SQLite-Datenbank (konsistenter Schnappschuss per `VACUUM INTO`,
+die letzten 14 als `.db.gz` in `sicherungen/`), holt das Bild, startet neu und prüft `/api/health`.
+
+### Server-Layout
+
+```
+/opt/drum-pattern-helper/
+  deploy.sh                 aus deploy/server/
+  docker-compose.prod.yml   aus deploy/server/
+  daten/drums.db            SQLite (Bind-Mount nach /data, UID 1000 = admin)
+  sicherungen/              drums-<Zeitstempel>.db.gz
+  .env                      optional, z. B. APP_PORT=3030
+/etc/nginx/sites-available/drumpatternhelper.blanke.nrw
+/etc/nginx/snippets/drumpatternhelper-headers.conf   CSP, HSTS u. a.
+```
+
+### Ersteinrichtung (einmalig, root)
+
+DNS-A-Record für `drumpatternhelper.blanke.nrw` auf den Server, dann die Dateien aus `deploy/server/`
+nach `~/dph-setup/` kopieren und ausführen:
+
+```bash
+sudo bash ~/dph-setup/einrichten-root.sh
+```
+
+Das Skript prüft das DNS, legt `/opt/drum-pattern-helper` an, installiert Vhost und Header-Snippet,
+holt das Zertifikat über den Webroot `/var/www/acme`, schaltet die Seite frei und startet die App als admin.
+Mehrfach ausführbar. Voraussetzung: admin ist an `ghcr.io` angemeldet (`docker login ghcr.io`), falls
+das Paket privat ist.
+
+### Lokal mit Docker
+
+```bash
+docker compose up -d --build     # baut aus dem Quellcode, Port 127.0.0.1:3000, Volume drums-data
+```
+
+> Für Service Worker und Installation als App ist HTTPS nötig (localhost ausgenommen).
 
 ## API
 
