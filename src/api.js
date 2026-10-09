@@ -9,11 +9,21 @@ async function request(method, url, body, { keepalive = false } = {}) {
   return res.status === 204 ? null : res.json();
 }
 
-const payload = ({ name, beats, bpm, layers }) => ({ name, beats, bpm, layers });
+function resource(base, payload) {
+  return {
+    list: () => request('GET', base),
+    create: (item) => request('POST', base, payload(item)),
+    save: (item, opts) => request('PUT', `${base}/${item.id}`, payload(item), opts),
+    remove: (id) => request('DELETE', `${base}/${id}`),
+  };
+}
 
-export const api = {
-  list: () => request('GET', '/api/patterns'),
-  create: (pattern) => request('POST', '/api/patterns', payload(pattern)),
-  save: (pattern, opts) => request('PUT', `/api/patterns/${pattern.id}`, payload(pattern), opts),
-  remove: (id) => request('DELETE', `/api/patterns/${id}`),
-};
+export const patternApi = resource('/api/patterns', ({ name, beats, bpm, tags, layers }) => ({
+  name,
+  beats,
+  bpm,
+  tags,
+  layers,
+}));
+
+export const arrangementApi = resource('/api/arrangements', ({ name, tags, items }) => ({ name, tags, items }));

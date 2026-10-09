@@ -1,7 +1,7 @@
 import { useRef } from 'preact/hooks';
 import { Icon, useAnimationFrame } from './ui.jsx';
 
-export function Transport({ engine, playing, onTogglePlay, master, onMaster, beats }) {
+export function Transport({ engine, playing, disabled = false, onTogglePlay, master, onMaster, sub }) {
   const counterRef = useRef(null);
   const last = useRef('');
 
@@ -21,7 +21,7 @@ export function Transport({ engine, playing, onTogglePlay, master, onMaster, bea
         <span class="lcd-value" ref={counterRef}>
           001.1
         </span>
-        <span class="lcd-sub">{beats}/4</span>
+        <span class="lcd-sub">{sub}</span>
       </div>
 
       <label class="master">
@@ -41,6 +41,7 @@ export function Transport({ engine, playing, onTogglePlay, master, onMaster, bea
         type="button"
         class={`play-btn${playing ? ' is-playing' : ''}`}
         aria-pressed={playing}
+        disabled={disabled && !playing}
         onClick={onTogglePlay}
         title="Abspielen / Stopp (Leertaste)"
       >

@@ -2,12 +2,19 @@
 // Ein Pattern hat eine globale Taktart (n/4) und pro Layer eine eigene
 // Unterteilung jeder Zählzeit (Anzahl Platzhalter) samt gesetzter Schläge.
 
+import { normalizeTags } from './tags.js';
+
 export const LAYERS = [
   { key: 'metro_high', label: 'Metronom High', short: 'M·Hi' },
   { key: 'metro_low', label: 'Metronom Low', short: 'M·Lo' },
   { key: 'hihat', label: 'Hi-Hat', short: 'HH' },
+  { key: 'hihat_open', label: 'Open Hi-Hat', short: 'OH' },
   { key: 'snare', label: 'Snare', short: 'SN' },
+  { key: 'tom_high', label: 'High Tom', short: 'T1' },
+  { key: 'tom_mid', label: 'Mid Tom', short: 'T2' },
+  { key: 'tom_low', label: 'Low Tom', short: 'T3' },
   { key: 'kick', label: 'Kick', short: 'BD' },
+  { key: 'cowbell', label: 'Cowbell', short: 'CB' },
 ];
 
 export const LAYER_KEYS = LAYERS.map((l) => l.key);
@@ -23,6 +30,26 @@ export const LIMITS = {
 };
 
 export const DEFAULT_VOLUME = 0.8;
+
+// Werte in hits[b][i]: 0 = kein Schlag, 1 = Schlag, 2 = Ghost Note (leise gespielt).
+export const HIT = { OFF: 0, ON: 1, GHOST: 2 };
+export const GHOST_LEVEL = 0.5;
+
+export function hitLevel(value) {
+  if (value === HIT.GHOST) return GHOST_LEVEL;
+  return value ? 1 : 0;
+}
+
+// Antippen schaltet weiter: kein Schlag → Schlag → Ghost Note → kein Schlag.
+export function nextHit(value) {
+  if (value === HIT.OFF) return HIT.ON;
+  return value === HIT.ON ? HIT.GHOST : HIT.OFF;
+}
+
+function toHit(value) {
+  if (Number(value) === HIT.GHOST) return HIT.GHOST;
+  return value ? HIT.ON : HIT.OFF;
+}
 
 export function clamp(value, min, max) {
   return Math.min(max, Math.max(min, value));
@@ -52,28 +79,30 @@ export function createLayer(key, beats) {
     key,
     volume: DEFAULT_VOLUME,
     muted: false,
+    hidden: false,
     subdivisions: new Array(beats).fill(sub),
     hits: Array.from({ length: beats }, (_, b) => defaultBeatHits(key, b, sub)),
   };
 }
 
-export function createPattern({ name = 'Neues Pattern', beats = 4, bpm = 100 } = {}) {
+export function createPattern({ name = 'Neues Pattern', beats = 4, bpm = 100, tags = [] } = {}) {
   return {
     name,
     beats,
     bpm,
+    tags,
     layers: LAYERS.map((l) => createLayer(l.key, beats)),
   };
 }
 
 // Überträgt Schläge auf eine neue Unterteilung. Ein Schlag bleibt erhalten,
 // wenn seine Position im Beat auch in der neuen Unterteilung existiert
-// (z. B. 2 → 4: Schlag auf "+" wandert auf Platz 3).
+// (z. B. 2 → 4: Schlag auf "+" wandert auf Platz 3). Ghost Notes bleiben Ghost Notes.
 export function resizeBeatHits(hits, to) {
   const from = hits.length;
   const out = new Array(to).fill(0);
   for (let j = 0; j < from; j++) {
-    if (hits[j] && (j * to) % from === 0) out[(j * to) / from] = 1;
+    if (hits[j] && (j * to) % from === 0) out[(j * to) / from] = hits[j];
   }
   return out;
 }
@@ -100,11 +129,11 @@ export function setLayerSubdivisions(pattern, key, sub) {
   return next;
 }
 
-export function toggleHit(pattern, key, beat, index) {
+export function cycleHit(pattern, key, beat, index) {
   return mapLayer(pattern, key, (l) => {
     const hits = l.hits.slice();
     hits[beat] = hits[beat].slice();
-    hits[beat][index] = hits[beat][index] ? 0 : 1;
+    hits[beat][index] = nextHit(hits[beat][index]);
     return { ...l, hits };
   });
 }
@@ -138,16 +167,22 @@ export function setBeats(pattern, beats) {
   return { ...pattern, beats: n, layers };
 }
 
-// Alle Schläge einer Zählzeit über alle Layer, als Bruchteil des Beats.
+// Alle Schläge einer Zählzeit über alle Layer, als Bruchteil des Beats,
+// zeitlich sortiert (wichtig für das Abdämpfen der offenen Hi-Hat).
 export function beatEvents(pattern, beat) {
   const events = [];
   for (const l of pattern.layers) {
     const sub = l.subdivisions[beat];
     const hits = l.hits[beat];
     if (!sub || !hits) continue;
-    for (let i = 0; i < sub; i++) if (hits[i]) events.push({ key: l.key, frac: i / sub });
+    for (let i = 0; i < sub; i++) if (hits[i]) events.push({ key: l.key, frac: i / sub, level: hitLevel(hits[i]) });
   }
-  return events;
+  return events.sort((a, b) => a.frac - b.frac);
+}
+
+// Dauer eines Durchlaufs in Sekunden.
+export function patternDuration(pattern) {
+  return (pattern.beats * 60) / pattern.bpm;
 }
 
 // Bringt beliebige Eingaben (API-Body, alte Datensätze) in eine gültige Form.
@@ -170,31 +205,40 @@ export function normalizePattern(input = {}) {
       const sub = toInt(rawSub, fallback.subdivisions[b], LIMITS.subMin, LIMITS.subMax);
       const rawHits = Array.isArray(raw.hits) && Array.isArray(raw.hits[b]) ? raw.hits[b] : [];
       subdivisions.push(sub);
-      hits.push(Array.from({ length: sub }, (_, i) => (rawHits[i] ? 1 : 0)));
+      hits.push(Array.from({ length: sub }, (_, i) => toHit(rawHits[i])));
     }
     const volume = Number(raw.volume);
     return {
       key,
       volume: Number.isFinite(volume) ? clamp(volume, 0, 1) : DEFAULT_VOLUME,
       muted: Boolean(raw.muted),
+      hidden: Boolean(raw.hidden),
       subdivisions,
       hits,
     };
   });
 
-  return { name, beats, bpm, layers };
+  return { name, beats, bpm, tags: normalizeTags(src.tags), layers };
 }
 
 function hitsFromString(beats, sub, s) {
-  // "x..." je Zählzeit, durch Leerzeichen getrennt
+  // "x" = Schlag, "g" = Ghost Note, "." = leer; je Zählzeit, durch Leerzeichen getrennt
   const groups = s.split(' ');
+  const value = { x: HIT.ON, g: HIT.GHOST };
   return Array.from({ length: beats }, (_, b) =>
-    Array.from({ length: sub }, (_, i) => (groups[b]?.[i] === 'x' ? 1 : 0)),
+    Array.from({ length: sub }, (_, i) => value[groups[b]?.[i]] ?? HIT.OFF),
   );
 }
 
 function demoLayer(key, beats, sub, pattern, volume = DEFAULT_VOLUME) {
-  return { key, volume, muted: false, subdivisions: new Array(beats).fill(sub), hits: hitsFromString(beats, sub, pattern) };
+  return {
+    key,
+    volume,
+    muted: false,
+    hidden: false,
+    subdivisions: new Array(beats).fill(sub),
+    hits: hitsFromString(beats, sub, pattern),
+  };
 }
 
 export function demoPatterns() {
@@ -204,6 +248,7 @@ export function demoPatterns() {
       name: 'Paradiddle',
       beats: 4,
       bpm: 155,
+      tags: ['Rudiment'],
       layers: [
         ...metro(4),
         demoLayer('hihat', 4, 4, '.... .... .... ....'),
@@ -215,6 +260,7 @@ export function demoPatterns() {
       name: '6 Stroke-Roll',
       beats: 4,
       bpm: 120,
+      tags: ['Rudiment'],
       layers: [
         ...metro(4),
         demoLayer('hihat', 4, 2, '.. .. .. ..'),
@@ -226,10 +272,12 @@ export function demoPatterns() {
       name: 'Beat 1',
       beats: 4,
       bpm: 130,
+      tags: ['Groove'],
       layers: [
         ...metro(4),
-        demoLayer('hihat', 4, 2, 'xx xx xx xx', 0.6),
-        demoLayer('snare', 4, 1, '. x . x'),
+        demoLayer('hihat', 4, 2, 'xx xx xx x.', 0.6),
+        demoLayer('hihat_open', 4, 2, '.. .. .. .x', 0.6),
+        demoLayer('snare', 4, 4, '..g. x... ..g. x...'),
         demoLayer('kick', 4, 2, 'x. .. xx ..'),
       ],
     },

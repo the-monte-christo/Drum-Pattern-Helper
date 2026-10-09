@@ -10,6 +10,31 @@ const idParam = {
   required: ['id'],
 };
 
+// REST-Endpunkte (Liste, Lesen, Anlegen, Ersetzen, Löschen) für eine Sammlung.
+function crud(app, path, collection, notFound) {
+  const missing = (reply) => reply.code(404).send({ error: notFound });
+
+  app.get(path, async () => collection.list());
+
+  app.get(`${path}/:id`, { schema: { params: idParam } }, async (req, reply) => {
+    return collection.get(req.params.id) ?? missing(reply);
+  });
+
+  app.post(path, async (req, reply) => {
+    reply.code(201);
+    return collection.create(req.body ?? {});
+  });
+
+  app.put(`${path}/:id`, { schema: { params: idParam } }, async (req, reply) => {
+    return collection.update(req.params.id, req.body ?? {}) ?? missing(reply);
+  });
+
+  app.delete(`${path}/:id`, { schema: { params: idParam } }, async (req, reply) => {
+    if (!collection.remove(req.params.id)) return missing(reply);
+    return reply.code(204).send();
+  });
+}
+
 export async function buildApp({ dbFile, staticDir, logger = false, seed = true } = {}) {
   const app = Fastify({ logger, bodyLimit: 256 * 1024 });
   const store = openStore(dbFile, { seed });
@@ -17,27 +42,8 @@ export async function buildApp({ dbFile, staticDir, logger = false, seed = true 
 
   app.get('/api/health', async () => ({ ok: true }));
 
-  app.get('/api/patterns', async () => store.list());
-
-  app.get('/api/patterns/:id', { schema: { params: idParam } }, async (req, reply) => {
-    const p = store.get(req.params.id);
-    return p ?? reply.code(404).send({ error: 'Pattern nicht gefunden' });
-  });
-
-  app.post('/api/patterns', async (req, reply) => {
-    reply.code(201);
-    return store.create(req.body ?? {});
-  });
-
-  app.put('/api/patterns/:id', { schema: { params: idParam } }, async (req, reply) => {
-    const p = store.update(req.params.id, req.body ?? {});
-    return p ?? reply.code(404).send({ error: 'Pattern nicht gefunden' });
-  });
-
-  app.delete('/api/patterns/:id', { schema: { params: idParam } }, async (req, reply) => {
-    if (!store.remove(req.params.id)) return reply.code(404).send({ error: 'Pattern nicht gefunden' });
-    return reply.code(204).send();
-  });
+  crud(app, '/api/patterns', store.patterns, 'Pattern nicht gefunden');
+  crud(app, '/api/arrangements', store.arrangements, 'Arrangement nicht gefunden');
 
   const indexFile = staticDir && join(staticDir, 'index.html');
   if (indexFile && existsSync(indexFile)) {

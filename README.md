@@ -1,9 +1,10 @@
 # Drum Pattern Helper
 
 Pattern-Baukasten und Übungstool für Schlagzeuger, als Progressive Web App.
-Pattern bestehen aus einer globalen Taktart (n/4) und fünf Layern (Metronom High,
-Metronom Low, Hi-Hat, Snare, Kick). Für jeden Layer lässt sich pro Zählzeit
-festlegen, wie viele Schläge es gibt (1–12, also auch Triolen, Quintolen und Sextolen).
+Pattern bestehen aus einer globalen Taktart (n/4) und zehn Layern (Metronom High,
+Metronom Low, Hi-Hat, Open Hi-Hat, Snare, High/Mid/Low Tom, Kick, Cowbell). Für jeden Layer
+lässt sich pro Zählzeit festlegen, wie viele Schläge es gibt (1–12, also auch Triolen,
+Quintolen und Sextolen). Arrangements reihen Pattern zu einem längeren Ablauf aneinander.
 
 Repository: <https://github.com/the-monte-christo/Drum-Pattern-Helper>
 
@@ -11,10 +12,19 @@ Hinweise für Entwickler und Coding-Agenten: [CLAUDE.md](CLAUDE.md)
 
 ## Funktionen
 
-- Pattern-Liste mit zuletzt gespeichertem Tempo; Neu, Duplizieren, Löschen
-- Taktart 1/4 bis 16/4, Tempo 20–300 BPM (Slider, ±, Tap-Tempo)
-- Layer-Raster: Platzhalter antippen setzt den Schlag (mit Vorhören); Playhead und aktuelle Zählzeit laufen mit
-- Editor: Schläge pro Zählzeit je Layer, „Alle“-Schnellwahl, Layer leeren
+- Zwei Ebenen per Tab: **Pattern** und **Arrangement**
+- Pattern-Liste mit zuletzt gespeichertem Tempo; Neu, Duplizieren, Löschen; Liste einklappbar
+- Tags für Pattern und Arrangements; alle vorhandenen Tags stehen als Filter über der Liste
+  (mehrere aktive Tags müssen alle zutreffen)
+- Taktart 1/4 bis 16/4, Tempo 20–300 BPM (Slider, ±1, ±5, Tap-Tempo)
+- Layer-Raster: Platzhalter antippen setzt den Schlag, nochmal antippen macht eine Ghost Note
+  (halbe Lautstärke, Zelle halb gefüllt), ein drittes Mal leert ihn (jeweils mit Vorhören);
+  Playhead und aktuelle Zählzeit laufen mit, breite Pattern scrollen beim Abspielen mit
+- Open Hi-Hat klingt höchstens bis zum nächsten Hi-Hat-Schlag
+- Editor (einklappbar): Schläge pro Zählzeit je Layer, „Alle“-Schnellwahl, Layer leeren,
+  Layer im Layer-Bereich ein-/ausblenden; Lautstärke-Spalte ebenfalls ausblendbar
+- Arrangements: Strang aus beliebigen Pattern (je ein Takt, eigenes Tempo und eigene Taktart),
+  Pattern per Klick hinten anhängen, ⇄ tauscht Nachbarn, × entfernt; Wiedergabe in Schleife
 - Wiedergabe mit sample-genauem Web-Audio-Scheduling; Lautstärke, Mute und Solo je Layer, Gesamtlautstärke
 - Jede Änderung wird sofort gespeichert (entprellt, mit automatischem Wiederholen bei Netzwerkfehlern)
 - Leertaste = Abspielen/Stopp; Bildschirm bleibt beim Üben an (Wake Lock)
@@ -56,8 +66,9 @@ npm start        # Produktionsserver auf :3000 (liefert dist/ aus)
 npm run icons    # PWA-Icons neu erzeugen
 ```
 
-Beim ersten Start mit leerer Datenbank werden drei Demo-Pattern angelegt
-(Paradiddle, 6 Stroke-Roll, Beat 1).
+Beim ersten Start mit leerer Datenbank werden drei Demo-Pattern (Paradiddle, 6 Stroke-Roll, Beat 1)
+und ein Demo-Arrangement (Warm-up) angelegt. Bestehende Datenbanken werden beim Start automatisch
+nachgerüstet (Tags-Spalte, Arrangement-Tabelle, neue Layer).
 
 ### Umgebungsvariablen
 
@@ -137,9 +148,15 @@ docker compose up -d --build     # baut aus dem Quellcode, Port 127.0.0.1:3000, 
 | GET     | `/api/patterns/:id` | Ein Pattern |
 | POST    | `/api/patterns`     | Pattern anlegen |
 | PUT     | `/api/patterns/:id` | Pattern ersetzen |
-| DELETE  | `/api/patterns/:id` | Pattern löschen |
+| DELETE  | `/api/patterns/:id` | Pattern löschen (entfernt es auch aus allen Arrangements) |
+| GET     | `/api/arrangements`     | Alle Arrangements |
+| GET     | `/api/arrangements/:id` | Ein Arrangement |
+| POST    | `/api/arrangements`     | Arrangement anlegen |
+| PUT     | `/api/arrangements/:id` | Arrangement ersetzen |
+| DELETE  | `/api/arrangements/:id` | Arrangement löschen |
 
-Eingaben werden serverseitig normalisiert (Grenzen, fehlende Layer, Array-Längen).
+Eingaben werden serverseitig normalisiert (Grenzen, fehlende Layer, Array-Längen, Tags,
+nur vorhandene Pattern in Arrangements).
 
 Pattern-Format:
 
@@ -148,20 +165,30 @@ Pattern-Format:
   "name": "Beat 1",
   "beats": 4,
   "bpm": 130,
+  "tags": ["Groove"],
   "layers": [
-    { "key": "hihat", "volume": 0.6, "muted": false,
+    { "key": "hihat", "volume": 0.6, "muted": false, "hidden": false,
       "subdivisions": [2, 2, 2, 2],
-      "hits": [[1, 1], [1, 1], [1, 1], [1, 1]] }
+      "hits": [[1, 1], [1, 2], [1, 1], [1, 0]] }
   ]
 }
 ```
 
-`subdivisions[b]` ist die Anzahl der Platzhalter auf Zählzeit `b`, `hits[b][i]` ob dort ein Schlag sitzt.
-Layer-Schlüssel: `metro_high`, `metro_low`, `hihat`, `snare`, `kick`.
+`subdivisions[b]` ist die Anzahl der Platzhalter auf Zählzeit `b`, `hits[b][i]` der Schlag dort:
+`0` = keiner, `1` = Schlag, `2` = Ghost Note. `hidden` blendet den Layer nur in der Ansicht aus.
+Layer-Schlüssel: `metro_high`, `metro_low`, `hihat`, `hihat_open`, `snare`, `tom_high`, `tom_mid`,
+`tom_low`, `kick`, `cowbell`.
+
+Arrangement-Format (`items` = Pattern-IDs in Abspielreihenfolge, Wiederholungen erlaubt):
+
+```json
+{ "name": "Warm-up", "tags": ["Übung"], "items": [1, 2, 3, 3] }
+```
 
 ## Mögliche nächste Schritte
 
-- Weitere Layer (Toms, Ride, Crash) und Akzente/Ghost Notes pro Schlag
+- Weitere Layer (Ride, Crash) und Akzente
+- Wiederholungen je Arrangement-Eintrag (z. B. „4× Beat 1“), Pattern per Ziehen umsortieren
 - Vorzähler, Tempo-Trainer (automatisch schneller werden)
 - Mehrtaktige Pattern
 - Login bzw. mehrere Nutzer (aktuell ein gemeinsamer Datenbestand ohne Authentifizierung)

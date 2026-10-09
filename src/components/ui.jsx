@@ -13,10 +13,23 @@ const ICONS = {
   volume: 'M4 9h4l5-4v14l-5-4H4zm12.5-1.5a6 6 0 0 1 0 9l-1.4-1.4a4 4 0 0 0 0-6.2z',
 };
 
+// Linien-Icons (gezeichnet mit stroke statt fill).
+const LINE_ICONS = {
+  eye: 'M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12zm10-3a3 3 0 1 0 0 6 3 3 0 0 0 0-6z',
+  eyeOff: 'M4 4l16 16M9.9 5.2A10 10 0 0 1 12 5c6.4 0 10 7 10 7a17 17 0 0 1-2.6 3.4M6.3 6.4C3.6 8.2 2 12 2 12s3.6 7 10 7a9.6 9.6 0 0 0 4.7-1.2M9.9 9.9a3 3 0 0 0 4.2 4.2',
+  chevron: 'M6 9l6 6 6-6',
+  swap: 'M4 8h15m-4-4 4 4-4 4M20 16H5m4-4-4 4 4 4',
+};
+
 export function Icon({ name, size = 20 }) {
+  const line = LINE_ICONS[name];
   return (
     <svg class="icon" width={size} height={size} viewBox="0 0 24 24" aria-hidden="true">
-      <path d={ICONS[name]} fill="currentColor" />
+      {line ? (
+        <path d={line} fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+      ) : (
+        <path d={ICONS[name]} fill="currentColor" />
+      )}
     </svg>
   );
 }

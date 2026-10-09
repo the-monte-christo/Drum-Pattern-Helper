@@ -1,14 +1,8 @@
 import { useRef } from 'preact/hooks';
 import { LIMITS, clamp, setBeats } from '../../shared/pattern.js';
+import { HeaderTitle } from './HeaderTitle.jsx';
+import { TagEditor } from './Tags.jsx';
 import { Icon, Stepper } from './ui.jsx';
-
-const STATUS_TEXT = {
-  loading: 'Lädt …',
-  saving: 'Speichert …',
-  saved: 'Gespeichert',
-  error: 'Nicht gespeichert – neuer Versuch läuft',
-  offline: 'Offline',
-};
 
 function useTapTempo(onTempo) {
   const taps = useRef([]);
@@ -24,42 +18,37 @@ function useTapTempo(onTempo) {
   };
 }
 
-export function PatternHeader({ pattern, status, onEdit, onDuplicate, onDelete, onOpenList }) {
+function TempoButton({ step, bpm, onTempo }) {
+  const verb = step < 0 ? 'verringern' : 'erhöhen';
+  const big = Math.abs(step) > 1;
+  return (
+    <button
+      type="button"
+      class={`stepper-btn${big ? ' stepper-btn--text' : ''}`}
+      aria-label={`Tempo um ${Math.abs(step)} ${verb}`}
+      onClick={() => onTempo(bpm + step)}
+    >
+      {big ? `${step > 0 ? '+' : '−'}${Math.abs(step)}` : <Icon name={step < 0 ? 'minus' : 'plus'} size={16} />}
+    </button>
+  );
+}
+
+export function PatternHeader({ pattern, status, tagSuggestions, onEdit, onDuplicate, onDelete }) {
   const setBpm = (bpm) => onEdit((p) => ({ ...p, bpm: clamp(bpm, LIMITS.bpmMin, LIMITS.bpmMax) }));
   const tap = useTapTempo(setBpm);
 
   return (
     <header class="pattern-header">
-      <div class="header-row">
-        <button type="button" class="icon-btn drawer-open" aria-label="Pattern-Liste öffnen" onClick={onOpenList}>
-          <Icon name="menu" />
-        </button>
-        <label class="name-field">
-          <span class="field-label">Pattern</span>
-          <input
-            class="name-input"
-            type="text"
-            value={pattern.name}
-            maxLength={LIMITS.nameMax}
-            spellcheck={false}
-            onInput={(e) => onEdit((p) => ({ ...p, name: e.currentTarget.value }))}
-            onBlur={(e) => {
-              if (!e.currentTarget.value.trim()) onEdit((p) => ({ ...p, name: 'Neues Pattern' }));
-            }}
-          />
-        </label>
-        <div class="header-actions">
-          <span class={`save-status save-status--${status}`} role="status">
-            {STATUS_TEXT[status]}
-          </span>
-          <button type="button" class="icon-btn" aria-label="Pattern duplizieren" title="Duplizieren" onClick={onDuplicate}>
-            <Icon name="copy" />
-          </button>
-          <button type="button" class="icon-btn icon-btn--danger" aria-label="Pattern löschen" title="Löschen" onClick={onDelete}>
-            <Icon name="trash" />
-          </button>
-        </div>
-      </div>
+      <HeaderTitle
+        kind="Pattern"
+        name={pattern.name}
+        maxLength={LIMITS.nameMax}
+        fallbackName="Neues Pattern"
+        status={status}
+        onRename={(name) => onEdit((p) => ({ ...p, name }))}
+        onDuplicate={onDuplicate}
+        onDelete={onDelete}
+      />
 
       <div class="header-row header-row--controls">
         <div class="field">
@@ -77,9 +66,8 @@ export function PatternHeader({ pattern, status, onEdit, onDuplicate, onDelete, 
         <div class="field field--tempo">
           <span class="field-label">Tempo</span>
           <div class="tempo">
-            <button type="button" class="stepper-btn" aria-label="Tempo verringern" onClick={() => setBpm(pattern.bpm - 1)}>
-              <Icon name="minus" size={16} />
-            </button>
+            <TempoButton step={-5} bpm={pattern.bpm} onTempo={setBpm} />
+            <TempoButton step={-1} bpm={pattern.bpm} onTempo={setBpm} />
             <input
               class="slider tempo-slider"
               type="range"
@@ -89,9 +77,8 @@ export function PatternHeader({ pattern, status, onEdit, onDuplicate, onDelete, 
               aria-label="Tempo in BPM"
               onInput={(e) => setBpm(Number(e.currentTarget.value))}
             />
-            <button type="button" class="stepper-btn" aria-label="Tempo erhöhen" onClick={() => setBpm(pattern.bpm + 1)}>
-              <Icon name="plus" size={16} />
-            </button>
+            <TempoButton step={1} bpm={pattern.bpm} onTempo={setBpm} />
+            <TempoButton step={5} bpm={pattern.bpm} onTempo={setBpm} />
             <output class="bpm-readout">
               {pattern.bpm}
               <small>BPM</small>
@@ -101,6 +88,10 @@ export function PatternHeader({ pattern, status, onEdit, onDuplicate, onDelete, 
             </button>
           </div>
         </div>
+      </div>
+
+      <div class="header-row">
+        <TagEditor tags={pattern.tags} suggestions={tagSuggestions} onChange={(tags) => onEdit((p) => ({ ...p, tags }))} />
       </div>
     </header>
   );
